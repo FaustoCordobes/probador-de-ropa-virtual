@@ -96,6 +96,19 @@
   }
   .chip-row button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
   #talle-row button{ font-size:10.5px; padding:5px 8px; }
+  #btn-edit-talles{
+    margin-top:8px; background:none; border:none; color:var(--accent2); font-size:11px;
+    cursor:pointer; padding:0; text-decoration:underline; text-underline-offset:2px;
+  }
+  #talle-editor{ margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); }
+  #talle-editor .te-note{ font-size:10.5px; color:var(--muted); margin-bottom:8px; line-height:1.4; }
+  #talle-editor .te-row{ display:flex; align-items:center; gap:6px; margin-bottom:5px; font-size:11px; }
+  #talle-editor .te-row span.te-label{ width:34px; font-weight:700; }
+  #talle-editor .te-row input{ width:50px; padding:3px 4px; border:1px solid var(--line); border-radius:6px; font-size:11px; }
+  #talle-editor .te-reset{
+    margin-top:4px; width:100%; padding:6px; border-radius:8px; border:1px dashed var(--muted);
+    background:transparent; color:var(--muted); font-size:10.5px; cursor:pointer;
+  }
 
   .color-row{ display:flex; align-items:center; gap:10px; margin-top:4px; }
   .color-row input[type=color]{ width:38px; height:38px; border:none; border-radius:10px; cursor:pointer; padding:0; background:none; }
@@ -227,6 +240,8 @@
       <div class="g-label">Talle</div>
       <div class="chip-row" id="talle-row"></div>
       <div id="talle-info" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
+      <button id="btn-edit-talles" type="button">✏️ Ajustar talles a tu país/tienda</button>
+      <div id="talle-editor" style="display:none;"></div>
     </div>
 
     <div class="options-group">
@@ -256,8 +271,9 @@ const SWATCHES = ['#c96f4a','#3f6b5e','#2b3a67','#8a1c3c','#e0b84c','#1c1c1c','#
 // Flare (vuelo del ruedo) por talle, para pantalones/shorts — es estilo, no afecta el calce
 const FLARE_BY_TALLE = { XS:0.85, S:0.95, M:1.05, L:1.2, XL:1.4, XXL:1.6, '3XL':1.75, '4XL':1.9, '5XL':2.05 };
 
-// Tabla de talles de referencia, inspirada en las tablas reales de SHEIN (contorno en cm)
-const TALLE_CHART = {
+// Tabla de talles de referencia, inspirada en las tablas reales de SHEIN (contorno en cm).
+// Se usa como valor por defecto; el usuario puede editarla (los talles varían según el país/tienda).
+const TALLE_CHART_DEFAULT = {
   mujer:{
     top:   { XS:[76,82], S:[82,88], M:[88,94], L:[94,102], XL:[102,110], XXL:[110,120], '3XL':[120,132], '4XL':[132,146], '5XL':[146,160] },
     bottom:{ XS:[58,64], S:[64,70], M:[70,76], L:[76,84],  XL:[84,92],   XXL:[92,102],  '3XL':[102,114], '4XL':[114,128], '5XL':[128,144] },
@@ -267,9 +283,10 @@ const TALLE_CHART = {
     bottom:{ XS:[70,76], S:[76,82], M:[82,90],  L:[90,98],   XL:[98,108],  XXL:[108,120], '3XL':[120,134], '4XL':[134,150], '5XL':[150,168] },
   }
 };
+state.talleChart = JSON.parse(JSON.stringify(TALLE_CHART_DEFAULT));
 function talleGroup(cat){ return (cat==='pantalon'||cat==='short') ? 'bottom' : 'top'; }
 function talleNoun(cat){ return (cat==='pantalon'||cat==='short') ? 'cintura' : 'pecho/busto'; }
-function talleChart(cat){ return TALLE_CHART[state.gender][talleGroup(cat)]; }
+function talleChart(cat){ return state.talleChart[state.gender][talleGroup(cat)]; }
 function findRequiredTalle(bodyCm, chart){
   const keys = Object.keys(chart);
   for(const t of keys){ if(bodyCm <= chart[t][1]) return t; }
@@ -277,8 +294,24 @@ function findRequiredTalle(bodyCm, chart){
 }
 
 /* ============ 3D SCENE ============ */
-let scene, camera, renderer, figureGroup, armPivotL, armPivotR, fabricTexture;
+let scene, camera, renderer, figureGroup, armPivotL, armPivotR, fabricTexture, faceTexture;
 const container = document.getElementById('stage3d');
+
+function createFaceTexture(){
+  const c = document.createElement('canvas'); c.width=128; c.height=128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,128,128);
+  ctx.fillStyle='rgba(70,64,58,0.6)';
+  ctx.beginPath(); ctx.ellipse(46,54,7,9,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(82,54,7,9,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(70,64,58,0.32)';
+  ctx.beginPath();
+  ctx.moveTo(64,64); ctx.lineTo(58,90); ctx.lineTo(70,90); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(70,64,58,0.55)'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(48,102); ctx.quadraticCurveTo(64,111,80,102); ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
 
 function createFabricTexture(){
   const c = document.createElement('canvas'); c.width=64; c.height=64;
@@ -309,6 +342,7 @@ function init3D(){
   container.appendChild(renderer.domElement);
 
   fabricTexture = createFabricTexture();
+  faceTexture = createFaceTexture();
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   const key = new THREE.DirectionalLight(0xfff2e2, 0.95);
@@ -325,15 +359,15 @@ function init3D(){
 
   const groundGeo = new THREE.CircleGeometry(260,48);
   groundGeo.rotateX(-Math.PI/2);
-  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({color:0xece5d8, roughness:1}));
+  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({color:0xf1ece2, roughness:1}));
   ground.receiveShadow = true;
   scene.add(ground);
 
   const baseMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(66,72,14,40),
-    new THREE.MeshStandardMaterial({color:0x9c9484, roughness:0.45, metalness:0.35})
+    new THREE.BoxGeometry(46,5,46),
+    new THREE.MeshStandardMaterial({color:0xcdd6db, roughness:0.15, metalness:0.4, transparent:true, opacity:0.65})
   );
-  baseMesh.position.y = 7;
+  baseMesh.position.y = 2.5;
   baseMesh.receiveShadow = true; baseMesh.castShadow = true;
   scene.add(baseMesh);
 
@@ -415,80 +449,92 @@ function rebuildFigure(){
   while(figureGroup.children.length) figureGroup.remove(figureGroup.children[0]);
 
   const s=state, L=computeLandmarksCm(s);
-  const skinMat = new THREE.MeshStandardMaterial({color:0xd7cab2, roughness:0.55, metalness:0.05});
-  const poleMat = new THREE.MeshStandardMaterial({color:0x8a8175, roughness:0.3, metalness:0.65});
+  const skinMat = new THREE.MeshStandardMaterial({color:0xb7bbbe, roughness:0.32, metalness:0.12});
+  const poleMat = new THREE.MeshStandardMaterial({color:0x6b6f72, roughness:0.25, metalness:0.75});
 
-  const poleTop = L.ankleY-2, poleLen = Math.max(poleTop-14, 10);
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.2,poleLen,16), poleMat);
-  pole.position.y = 14+poleLen/2;
+  const poleTop = L.ankleY-2, poleLen = Math.max(poleTop-5, 10);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,poleLen,14), poleMat);
+  pole.position.y = 5+poleLen/2;
   pole.castShadow = true;
   figureGroup.add(pole);
 
   const torsoGeo = new THREE.LatheGeometry(v2([
-    [L.hipHalf*0.55, L.crotchY-2],
-    [L.hipHalf, L.hipY],
-    [L.waistHalf, L.waistY],
-    [L.chestHalf, L.chestY],
-    [L.shoulderHalf*0.78, L.shoulderY-2],
-    [L.neckHalf, L.neckY],
-    [L.neckHalf*0.85, L.neckY+3],
-  ]), 32);
+    [L.hipHalf*0.5,  L.crotchY-3],
+    [L.hipHalf*0.9,  L.crotchY+(L.hipY-L.crotchY)*0.4],
+    [L.hipHalf,      L.hipY],
+    [L.waistHalf*1.08, L.hipY-(L.hipY-L.waistY)*0.4],
+    [L.waistHalf,    L.waistY],
+    [L.waistHalf*1.07, L.waistY-(L.waistY-L.chestY)*0.35],
+    [L.chestHalf,    L.chestY],
+    [L.chestHalf*0.9, L.chestY-(L.chestY-L.shoulderY)*0.45],
+    [L.shoulderHalf*0.86, L.shoulderY-1],
+    [L.neckHalf*1.35, L.shoulderY-(L.shoulderY-L.neckY)*0.45],
+    [L.neckHalf,     L.neckY],
+    [L.neckHalf*0.88, L.neckY+3],
+  ]), 40);
   const torso = new THREE.Mesh(torsoGeo, skinMat);
-  torso.scale.z = 0.66;
+  torso.scale.z = 0.68;
   torso.castShadow = true; torso.receiveShadow = true;
   figureGroup.add(torso);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(L.headR,24,20), skinMat);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(L.headR,26,22), skinMat);
   head.position.y = L.headCY;
-  head.scale.z = 0.88;
+  head.scale.set(0.86, 1.18, 0.92);
   head.castShadow = true;
   figureGroup.add(head);
 
-  const ringMat = new THREE.MeshStandardMaterial({color:0x2b2620, roughness:0.5});
-  [[L.neckY,L.neckHalf],[L.waistY,L.waistHalf],[L.hipY,L.hipHalf]].forEach(([y,r])=>{
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r*1.01, 0.35, 8, 32), ringMat);
-    ring.rotation.x = Math.PI/2;
-    ring.position.y = y;
-    ring.scale.z = 0.66;
-    figureGroup.add(ring);
-  });
+  // marca de cara al frente, para saber siempre hacia dónde mira el maniquí
+  if(faceTexture){
+    const faceMat = new THREE.MeshBasicMaterial({ map:faceTexture, transparent:true, depthWrite:false, side:THREE.FrontSide });
+    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(L.headR*1.2, L.headR*1.35), faceMat);
+    facePlane.position.set(0, L.headCY-L.headR*0.06, L.headR*0.92*0.98);
+    figureGroup.add(facePlane);
+  }
 
-  const legOffset = L.hipHalf*0.42;
-  const rTop=L.hipHalf*0.42, rKnee=rTop*0.68, rAnkle=rTop*0.48, rFoot=rAnkle*1.35;
+  // (sin anillos de articulación: acabado liso y continuo, como un maniquí de vidriera real)
+
+  const legOffset = L.hipHalf*0.4;
+  const rTop=L.hipHalf*0.44, rKnee=rTop*0.66, rCalf=rKnee*1.12, rAnkle=rTop*0.42, rFoot=rAnkle*1.35;
   [-1,1].forEach(sign=>{
     const legGeo = new THREE.LatheGeometry(v2([
       [rAnkle*0.6, L.ankleY-5],
       [rFoot, L.ankleY-2],
       [rAnkle, L.ankleY],
+      [rCalf, L.ankleY+(L.kneeY-L.ankleY)*0.42],
       [rKnee, L.kneeY],
+      [rTop*0.92, L.kneeY+(L.crotchY-L.kneeY)*0.55],
       [rTop, L.crotchY],
-      [rTop*0.75, L.crotchY+3],
-    ]),24);
+      [rTop*0.7, L.crotchY+3],
+    ]),22);
     const leg = new THREE.Mesh(legGeo, skinMat);
     leg.position.x = sign*legOffset;
-    leg.scale.z = 0.8;
+    leg.scale.z = 0.82;
     leg.castShadow = true; leg.receiveShadow = true;
     figureGroup.add(leg);
   });
 
   const armLen = L.shoulderY-L.wristY, elbowOff = L.shoulderY-L.elbowY;
+  const shoulderSurfaceR = L.shoulderHalf*0.86; // radio real del torso a la altura del hombro
   armPivotL=null; armPivotR=null;
   [-1,1].forEach(sign=>{
     const pivot = new THREE.Group();
-    pivot.position.set(sign*(L.shoulderHalf*0.75+L.chestHalf*0.35), L.shoulderY-3, 0);
+    // el brazo arranca un poco DENTRO del torso para que se vea pegado y relleno, sin hueco
+    pivot.position.set(sign*(shoulderSurfaceR + L.upperArmHalf*0.25), L.shoulderY-2, 0);
     const armGeo = new THREE.LatheGeometry(v2([
-      [L.upperArmHalf, 0],
-      [L.upperArmHalf*0.92, -elbowOff],
-      [L.forearmHalf, -elbowOff],
+      [L.upperArmHalf*0.95, 3],
+      [L.upperArmHalf, -elbowOff*0.35],
+      [L.upperArmHalf*0.9, -elbowOff],
+      [L.forearmHalf*1.08, -elbowOff-(armLen-elbowOff)*0.3],
+      [L.forearmHalf*0.94, -armLen*0.8],
       [L.forearmHalf*0.8, -armLen],
     ]),18);
     const arm = new THREE.Mesh(armGeo, skinMat);
-    arm.scale.z = 0.86;
+    arm.scale.z = 0.88;
     arm.castShadow = true;
     pivot.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(L.forearmHalf*1.05,14,12), skinMat);
-    hand.position.y = -armLen-L.forearmHalf*0.6;
-    hand.scale.z = 0.86;
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(L.forearmHalf*1.0,14,12), skinMat);
+    hand.position.y = -armLen-L.forearmHalf*0.55;
+    hand.scale.set(0.85,1.15,0.75);
     hand.castShadow = true;
     pivot.add(hand);
     figureGroup.add(pivot);
@@ -721,7 +767,7 @@ function setGender(g){
   document.getElementById('btn-mujer').classList.toggle('active', g==='mujer');
   document.getElementById('btn-hombre').classList.toggle('active', g==='hombre');
   syncSliders();
-  renderTalleOptions();
+  refreshTalleUI();
   rebuildFigure();
 }
 document.getElementById('btn-reset').addEventListener('click', ()=> setGender(state.gender));
@@ -734,7 +780,7 @@ tabButtons.forEach(btn=>{
     btn.classList.add('active');
     state.clothing.category = btn.dataset.cat;
     updateOptionVisibility();
-    renderTalleOptions();
+    refreshTalleUI();
     rebuildFigure();
   });
 });
@@ -774,6 +820,62 @@ function updateTalleInfo(){
   const t = state.clothing.talle;
   const [a,b] = chart[t] || chart['M'];
   document.getElementById('talle-info').textContent = `Talle ${t} ≈ ${a}–${b} cm de contorno de ${talleNoun(cat)}`;
+}
+function refreshTalleUI(){
+  renderTalleOptions();
+  if(document.getElementById('talle-editor').style.display!=='none') renderTalleEditor();
+}
+document.getElementById('btn-edit-talles').addEventListener('click', ()=>{
+  const ed = document.getElementById('talle-editor');
+  const show = ed.style.display==='none';
+  ed.style.display = show ? '' : 'none';
+  if(show) renderTalleEditor();
+});
+function renderTalleEditor(){
+  const cat = state.clothing.category;
+  const group = talleGroup(cat);
+  const chart = state.talleChart[state.gender][group];
+  const ed = document.getElementById('talle-editor');
+  ed.innerHTML = '';
+  const note = document.createElement('div');
+  note.className = 'te-note';
+  note.textContent = `Cada tienda/país mide distinto. Editá el rango en cm de ${talleNoun(cat)} de cada talle para que coincida con la ropa que comprás.`;
+  ed.appendChild(note);
+
+  Object.keys(chart).forEach(t=>{
+    const [a,b] = chart[t];
+    const row = document.createElement('div');
+    row.className = 'te-row';
+    const label = document.createElement('span');
+    label.className = 'te-label'; label.textContent = t;
+    const inA = document.createElement('input'); inA.type='number'; inA.value=a; inA.min=30; inA.max=260;
+    const dash = document.createElement('span'); dash.textContent='–';
+    const inB = document.createElement('input'); inB.type='number'; inB.value=b; inB.min=30; inB.max=260;
+    const cm = document.createElement('span'); cm.textContent='cm'; cm.style.color='var(--muted)';
+    function commit(){
+      let na=Number(inA.value), nb=Number(inB.value);
+      if(isNaN(na)) na=a; if(isNaN(nb)) nb=b;
+      if(na>nb){ const tmp=na; na=nb; nb=tmp; }
+      state.talleChart[state.gender][group][t] = [na,nb];
+      renderTalleOptions();
+      rebuildFigure();
+    }
+    inA.addEventListener('input', commit);
+    inB.addEventListener('input', commit);
+    row.append(label, inA, dash, inB, cm);
+    ed.appendChild(row);
+  });
+
+  const resetBtn = document.createElement('button');
+  resetBtn.type='button'; resetBtn.className='te-reset';
+  resetBtn.textContent='↺ Restablecer a valores de referencia (SHEIN)';
+  resetBtn.addEventListener('click', ()=>{
+    state.talleChart[state.gender][group] = JSON.parse(JSON.stringify(TALLE_CHART_DEFAULT[state.gender][group]));
+    renderTalleEditor();
+    renderTalleOptions();
+    rebuildFigure();
+  });
+  ed.appendChild(resetBtn);
 }
 document.querySelectorAll('.chip-row[data-field]').forEach(row=>{
   const field = row.dataset.field;
