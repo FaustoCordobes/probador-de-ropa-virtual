@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Probador Virtual</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f2ee; --panel:#ffffff; --ink:#2b2620; --muted:#8a8175;
+    --accent:#c96f4a; --accent2:#3f6b5e; --line:#e6e1d8; --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); min-height:100vh;
+  }
+  header{ padding:18px 24px 10px; text-align:center; }
+  header h1{ margin:0; font-size:22px; letter-spacing:.3px; font-weight:700; }
+  header p{ margin:4px 0 0; color:var(--muted); font-size:13px; }
+
+  .layout{
+    display:grid; grid-template-columns: 270px 1fr 280px; gap:16px;
+    padding:12px 20px 40px; max-width:1200px; margin:0 auto; align-items:start;
+  }
+  @media (max-width: 960px){ .layout{ grid-template-columns: 1fr; } }
+
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; }
+  .panel h2{ font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 12px; }
+
+  .gender-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+  .gender-toggle button{
+    flex:1; padding:9px 6px; border-radius:10px; border:1px solid var(--line);
+    background:#faf9f6; cursor:pointer; font-size:13px; font-weight:600; color:var(--ink); transition:.15s;
+  }
+  .gender-toggle button.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+
+  .slider-row{ margin-bottom:14px; }
+  .slider-row .label-row{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .slider-row .label-row span:last-child{ color:var(--accent); font-weight:700; }
+  .slider-row input[type=range]{ width:100%; accent-color:var(--accent); cursor:pointer; }
+
+  button.reset{
+    width:100%; margin-top:4px; padding:9px; border-radius:10px; border:1px dashed var(--muted);
+    background:transparent; color:var(--muted); cursor:pointer; font-size:12px;
+  }
+
+  .stage{ display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:10px; }
+
+  .view-presets{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:10px; }
+  .view-presets button{
+    padding:6px 10px; font-size:11px; border-radius:999px; border:1px solid var(--line);
+    background:#faf9f6; cursor:pointer; color:var(--ink);
+  }
+  .view-presets button.active{ background:var(--accent2); color:#fff; border-color:var(--accent2); }
+
+  #stage3d{
+    width:100%; max-width:340px; aspect-ratio:3/4; border-radius:var(--radius);
+    overflow:hidden; border:1px solid var(--line);
+    background:radial-gradient(circle at 50% 25%,#fbfaf7,#eae4d8);
+    cursor:grab; touch-action:none;
+  }
+  #stage3d:active{ cursor:grabbing; }
+  #stage3d canvas{ display:block; width:100%; height:100%; }
+
+  .rotate-row{ width:100%; max-width:340px; margin-top:10px; }
+  .rotate-row input[type=range]{ width:100%; accent-color:var(--accent2); cursor:pointer; }
+  .rotate-hint{ font-size:11px; color:var(--muted); text-align:center; margin-top:4px; }
+  .sub-label-row{ display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .sub-label-row span:last-child{ color:var(--accent2); font-weight:700; }
+
+  .summary{ margin-top:10px; font-size:12px; color:var(--muted); text-align:center; line-height:1.6; }
+  .summary b{ color:var(--ink); }
+
+  .tabs{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .tabs button{
+    flex:1 1 auto; padding:8px 6px; font-size:12px; border-radius:9px; border:1px solid var(--line);
+    background:#faf9f6; cursor:pointer; font-weight:600; color:var(--ink);
+  }
+  .tabs button.active{ background:var(--accent2); color:#fff; border-color:var(--accent2); }
+
+  .options-group{ margin-bottom:12px; }
+  .options-group .g-label{ font-size:11px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em; }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip-row button{
+    padding:6px 11px; font-size:12px; border-radius:999px; border:1px solid var(--line);
+    background:#faf9f6; cursor:pointer; color:var(--ink);
+  }
+  .chip-row button.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  .color-row{ display:flex; align-items:center; gap:10px; margin-top:4px; }
+  .color-row input[type=color]{ width:38px; height:38px; border:none; border-radius:10px; cursor:pointer; padding:0; background:none; }
+  .swatches{ display:flex; gap:6px; flex-wrap:wrap; }
+  .swatches button{ width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>👗 Probador Virtual</h1>
+  <p>Ajustá el cuerpo, girá el maniquí en 3D y probate ropa casual</p>
+</header>
+
+<div class="layout">
+
+  <!-- MEDIDAS -->
+  <div class="panel">
+    <h2>Cuerpo</h2>
+    <div class="gender-toggle">
+      <button id="btn-mujer" class="active">Mujer</button>
+      <button id="btn-hombre">Hombre</button>
+    </div>
+
+    <div class="slider-row">
+      <div class="label-row"><span>Altura</span><span id="v-height">165 cm</span></div>
+      <input type="range" id="s-height" min="145" max="200" step="1">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>Hombros</span><span id="v-shoulder">36 cm</span></div>
+      <input type="range" id="s-shoulder" min="28" max="52" step="1">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>Pecho / Busto</span><span id="v-chest">26 cm</span></div>
+      <input type="range" id="s-chest" min="20" max="44" step="1">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>Cintura</span><span id="v-waist">23 cm</span></div>
+      <input type="range" id="s-waist" min="16" max="42" step="1">
+    </div>
+    <div class="slider-row">
+      <div class="label-row"><span>Cadera</span><span id="v-hip">34 cm</span></div>
+      <input type="range" id="s-hip" min="22" max="48" step="1">
+    </div>
+    <button class="reset" id="btn-reset">↺ Restablecer medidas promedio</button>
+  </div>
+
+  <!-- MANIQUI 3D -->
+  <div class="panel stage">
+    <div class="view-presets" id="view-presets">
+      <button data-ang="0" class="active">Frente</button>
+      <button data-ang="45">3/4</button>
+      <button data-ang="90">Perfil</button>
+      <button data-ang="180">Espalda</button>
+      <button data-ang="270">Perfil</button>
+      <button data-ang="315">3/4</button>
+    </div>
+
+    <div id="stage3d"></div>
+
+    <div class="rotate-row">
+      <input type="range" id="s-rotate" min="0" max="359" step="1" value="0">
+      <div class="rotate-hint">🔄 Arrastrá la figura para girarla · <span id="v-angle">0° — Frente</span></div>
+    </div>
+
+    <div class="rotate-row" style="margin-top:14px;">
+      <div class="sub-label-row"><span>Brazos</span><span id="v-arms">Abajo</span></div>
+      <input type="range" id="s-arms" min="0" max="180" step="1" value="0">
+      <div class="view-presets" style="margin-top:6px;" id="arm-presets">
+        <button data-arm="0" class="active">Abajo</button>
+        <button data-arm="90">Adelante</button>
+        <button data-arm="170">Arriba</button>
+      </div>
+    </div>
+
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <!-- ROPA -->
+  <div class="panel">
+    <h2>Prenda</h2>
+    <div class="tabs">
+      <button data-cat="ninguna" class="active">Ninguna</button>
+      <button data-cat="remera">Remera</button>
+      <button data-cat="vestido">Vestido</button>
+      <button data-cat="pantalon">Pantalón</button>
+      <button data-cat="short">Short</button>
+    </div>
+
+    <div id="opts-sleeve" class="options-group">
+      <div class="g-label">Mangas</div>
+      <div class="chip-row" data-field="sleeve">
+        <button data-val="sisa">Sin mangas</button>
+        <button data-val="corta" class="active">Cortas</button>
+        <button data-val="larga">Largas</button>
+      </div>
+    </div>
+
+    <div id="opts-length-top" class="options-group">
+      <div class="g-label">Largo</div>
+      <div class="chip-row" data-field="length">
+        <button data-val="corta">Corto / crop</button>
+        <button data-val="regular" class="active">Regular</button>
+        <button data-val="larga">Largo / oversize</button>
+      </div>
+    </div>
+
+    <div id="opts-length-dress" class="options-group" style="display:none">
+      <div class="g-label">Largo</div>
+      <div class="chip-row" data-field="length">
+        <button data-val="mini">Mini</button>
+        <button data-val="midi" class="active">Midi</button>
+        <button data-val="maxi">Maxi</button>
+      </div>
+    </div>
+
+    <div id="opts-length-pants" class="options-group" style="display:none">
+      <div class="g-label">Largo</div>
+      <div class="chip-row" data-field="length">
+        <button data-val="capri">Capri</button>
+        <button data-val="largo" class="active">Largo</button>
+      </div>
+    </div>
+
+    <div id="opts-talle" class="options-group">
+      <div class="g-label">Talle</div>
+      <div class="chip-row" id="talle-row"></div>
+      <div id="talle-info" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
+    </div>
+
+    <div class="options-group">
+      <div class="g-label">Color</div>
+      <div class="color-row">
+        <input type="color" id="s-color" value="#c96f4a">
+        <div class="swatches" id="swatches"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const state = {
+  gender:'mujer',
+  height:165, shoulder:36, chest:26, waist:23, hip:34,
+  theta:0, armLift:0,
+  clothing:{ category:'ninguna', sleeve:'corta', length:'regular', talle:'M', color:'#c96f4a' }
+};
+const DEFAULTS = {
+  mujer:{height:165, shoulder:36, chest:26, waist:23, hip:34},
+  hombre:{height:178, shoulder:44, chest:32, waist:30, hip:32}
+};
+const SWATCHES = ['#c96f4a','#3f6b5e','#2b3a67','#8a1c3c','#e0b84c','#1c1c1c','#ffffff','#7d8471'];
+const EASE_BY_TALLE = { XS:0.5, S:1.5, M:3, L:5, XL:7.5, XXL:10 };
+const FLARE_BY_TALLE = { XS:0.85, S:0.95, M:1.05, L:1.2, XL:1.4, XXL:1.6 };
+const TALLE_CHART = {
+  mujer:{
+    top:   { XS:[78,82], S:[82,86], M:[86,90], L:[90,96], XL:[96,102], XXL:[102,108] },
+    bottom:{ XS:[60,64], S:[64,68], M:[68,72], L:[72,78], XL:[78,84],  XXL:[84,90]   },
+  },
+  hombre:{
+    top:   { XS:[86,90], S:[90,96], M:[96,102], L:[102,108], XL:[108,114], XXL:[114,120] },
+    bottom:{ XS:[72,76], S:[76,82], M:[82,88],  L:[88,94],   XL:[94,100],  XXL:[100,108] },
+  }
+};
+function talleGroup(cat){ return (cat==='pantalon'||cat==='short') ? 'bottom' : 'top'; }
+function talleNoun(cat){ return (cat==='pantalon'||cat==='short') ? 'cintura' : 'pecho/busto'; }
+
+/* ============ 3D SCENE ============ */
+let scene, camera, renderer, figureGroup, armPivotL, armPivotR;
+const container = document.getElementById('stage3d');
+
+function init3D(){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(30, 3/4, 1, 3000);
+
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  container.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const key = new THREE.DirectionalLight(0xfff2e2, 0.95);
+  key.position.set(140, 320, 260);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024,1024);
+  key.shadow.camera.left=-150; key.shadow.camera.right=150;
+  key.shadow.camera.top=250; key.shadow.camera.bottom=-20;
+  key.shadow.camera.far=800;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xdbe6ff, 0.32);
+  fill.position.set(-220,180,-120);
+  scene.add(fill);
+
+  const groundGeo = new THREE.CircleGeometry(260,48);
+  groundGeo.rotateX(-Math.PI/2);
+  const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({color:0xece5d8, roughness:1}));
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const baseMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(66,72,14,40),
+    new THREE.MeshStandardMaterial({color:0x9c9484, roughness:0.45, metalness:0.35})
+  );
+  baseMesh.position.y = 7;
+  baseMesh.receiveShadow = true; baseMesh.castShadow = true;
+  scene.add(baseMesh);
+
+  figureGroup = new THREE.Group();
+  scene.add(figureGroup);
+
+  fitRenderer();
+  window.addEventListener('resize', fitRenderer);
+  animate();
+
+  // drag to rotate
+  let dragging=false, startX=0, startTheta=0;
+  container.addEventListener('pointerdown', e=>{
+    dragging=true; startX=e.clientX; startTheta=state.theta;
+    container.setPointerCapture(e.pointerId);
+  });
+  container.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const dx = e.clientX-startX;
+    setThetaDeg(startTheta - dx*0.5);
+  });
+  container.addEventListener('pointerup', ()=> dragging=false);
+  container.addEventListener('pointercancel', ()=> dragging=false);
+}
+function fitRenderer(){
+  const w = container.clientWidth, h = container.clientHeight;
+  if(!w||!h) return;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+function animate(){
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+function disposeGroup(g){
+  g.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); }
+  });
+}
+
+function computeLandmarksCm(s){
+  const H = s.height;
+  const neckY     = H*0.885;
+  const shoulderY = H*0.855;
+  const chestY    = H*0.77;
+  const waistY    = H*0.625;
+  const hipY      = H*0.54;
+  const crotchY   = H*0.515;
+  const kneeY     = H*0.29;
+  const ankleY    = H*0.06;
+  const headR     = H*0.05;
+  const headCY    = H-headR;
+  const elbowY    = shoulderY-0.17*H;
+  const wristY    = shoulderY-0.34*H;
+
+  const shoulderHalf = s.shoulder/2;
+  const chestHalf    = s.chest/2;
+  const waistHalf    = s.waist/2;
+  const hipHalf       = s.hip/2;
+  const neckHalf      = shoulderHalf*0.30;
+  const upperArmHalf  = shoulderHalf*0.20;
+  const forearmHalf   = shoulderHalf*0.15;
+
+  return {H,neckY,shoulderY,chestY,waistY,hipY,crotchY,kneeY,ankleY,headR,headCY,elbowY,wristY,
+    shoulderHalf,chestHalf,waistHalf,hipHalf,neckHalf,upperArmHalf,forearmHalf};
+}
+function v2(pts){ return pts.map(([r,y])=> new THREE.Vector2(Math.max(r,0.35), y)); }
+
+function rebuildFigure(){
+  disposeGroup(figureGroup);
+  while(figureGroup.children.length) figureGroup.remove(figureGroup.children[0]);
+
+  const s=state, L=computeLandmarksCm(s);
+  const skinMat = new THREE.MeshStandardMaterial({color:0xd7cab2, roughness:0.55, metalness:0.05});
+  const poleMat = new THREE.MeshStandardMaterial({color:0x8a8175, roughness:0.3, metalness:0.65});
+
+  // pole (rotates with the figure, like it's bolted to the mannequin's foot)
+  const poleTop = L.ankleY-2, poleLen = Math.max(poleTop-14, 10);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.2,poleLen,16), poleMat);
+  pole.position.y = 14+poleLen/2;
+  pole.castShadow = true;
+  figureGroup.add(pole);
+
+  // torso
+  const torsoGeo = new THREE.LatheGeometry(v2([
+    [L.hipHalf*0.55, L.crotchY-2],
+    [L.hipHalf, L.hipY],
+    [L.waistHalf, L.waistY],
+    [L.chestHalf, L.chestY],
+    [L.shoulderHalf*0.78, L.shoulderY-2],
+    [L.neckHalf, L.neckY],
+    [L.neckHalf*0.85, L.neckY+3],
+  ]), 32);
+  const torso = new THREE.Mesh(torsoGeo, skinMat);
+  torso.scale.z = 0.64;
+  torso.castShadow = true; torso.receiveShadow = true;
+  figureGroup.add(torso);
+
+  // head (smooth, featureless — like a real display mannequin)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(L.headR,24,20), skinMat);
+  head.position.y = L.headCY;
+  head.scale.z = 0.88;
+  head.castShadow = true;
+  figureGroup.add(head);
+
+  // jointed rings, like an articulated dress-form mannequin
+  const ringMat = new THREE.MeshStandardMaterial({color:0x2b2620, roughness:0.5});
+  [[L.neckY,L.neckHalf],[L.waistY,L.waistHalf],[L.hipY,L.hipHalf]].forEach(([y,r])=>{
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r*1.01, 0.35, 8, 32), ringMat);
+    ring.rotation.x = Math.PI/2;
+    ring.position.y = y;
+    ring.scale.z = 0.64;
+    figureGroup.add(ring);
+  });
+
+  // legs
+  const legOffset = L.hipHalf*0.42;
+  const rTop=L.hipHalf*0.42, rKnee=rTop*0.68, rAnkle=rTop*0.48, rFoot=rAnkle*1.35;
+  [-1,1].forEach(sign=>{
+    const legGeo = new THREE.LatheGeometry(v2([
+      [rAnkle*0.6, L.ankleY-5],
+      [rFoot, L.ankleY-2],
+      [rAnkle, L.ankleY],
+      [rKnee, L.kneeY],
+      [rTop, L.crotchY],
+      [rTop*0.75, L.crotchY+3],
+    ]),24);
+    const leg = new THREE.Mesh(legGeo, skinMat);
+    leg.position.x = sign*legOffset;
+    leg.scale.z = 0.78;
+    leg.castShadow = true; leg.receiveShadow = true;
+    figureGroup.add(leg);
+  });
+
+  // arms on shoulder pivots so they can be raised
+  const armLen = L.shoulderY-L.wristY, elbowOff = L.shoulderY-L.elbowY;
+  armPivotL=null; armPivotR=null;
+  [-1,1].forEach(sign=>{
+    const pivot = new THREE.Group();
+    pivot.position.set(sign*L.shoulderHalf*0.92, L.shoulderY-3, 0);
+    const armGeo = new THREE.LatheGeometry(v2([
+      [L.upperArmHalf, 0],
+      [L.upperArmHalf*0.92, -elbowOff],
+      [L.forearmHalf, -elbowOff],
+      [L.forearmHalf*0.8, -armLen],
+    ]),18);
+    const arm = new THREE.Mesh(armGeo, skinMat);
+    arm.scale.z = 0.85;
+    arm.castShadow = true;
+    pivot.add(arm);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(L.forearmHalf*1.05,14,12), skinMat);
+    hand.position.y = -armLen-L.forearmHalf*0.6;
+    hand.scale.z = 0.85;
+    hand.castShadow = true;
+    pivot.add(hand);
+    figureGroup.add(pivot);
+    if(sign===-1) armPivotL=pivot; else armPivotR=pivot;
+  });
+
+  // clothing
+  const c=s.clothing;
+  if(c.category==='remera') addTopMesh(L,c,false);
+  else if(c.category==='vestido') addTopMesh(L,c,true);
+  else if(c.category==='pantalon') addBottomMesh(L,c,false);
+  else if(c.category==='short') addBottomMesh(L,c,true);
+
+  applyArmLift();
+  updateSummary();
+}
+
+function addTopMesh(L,cfg,isDress){
+  const ease = EASE_BY_TALLE[cfg.talle] ?? 3;
+  let hemY, topR;
+  if(isDress){
+    if(cfg.length==='mini'){ hemY=L.hipY-4; topR=L.hipHalf*1.05; }
+    else if(cfg.length==='maxi'){ hemY=L.ankleY+3; topR=L.hipHalf*1.55; }
+    else { hemY=(L.kneeY+L.ankleY)/2; topR=L.hipHalf*1.3; }
+  } else {
+    if(cfg.length==='corta'){ hemY=L.waistY+6; topR=L.waistHalf*1.05; }
+    else if(cfg.length==='larga'){ hemY=L.hipY-6; topR=L.hipHalf*1.05; }
+    else { hemY=L.waistY-4; topR=L.waistHalf*1.08; }
+  }
+  const shoulderR=L.shoulderHalf*0.98+ease*0.5;
+  const chestR=L.chestHalf+ease;
+  const hemR=topR+ease;
+  const midR = isDress ? L.waistHalf+ease*0.8 : chestR*0.97;
+  const midY = isDress ? L.waistY : L.chestY-2;
+
+  const geo = new THREE.LatheGeometry(v2([
+    [hemR, hemY],
+    [midR, midY],
+    [chestR, L.chestY],
+    [shoulderR, L.shoulderY-1],
+    [L.neckHalf*1.15+ease*0.3, L.neckY-2],
+  ]),32);
+  const mat = new THREE.MeshStandardMaterial({color:new THREE.Color(cfg.color), roughness:0.82, metalness:0.02, side:THREE.DoubleSide});
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.scale.z = 0.72;
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  figureGroup.add(mesh);
+
+  if(cfg.sleeve && cfg.sleeve!=='sisa'){
+    const reachLocal = cfg.sleeve==='corta' ? -(0.28*(L.shoulderY-L.elbowY)) : -((L.shoulderY-L.wristY)*0.92);
+    const sHalf = L.upperArmHalf+ease*0.6;
+    [armPivotL,armPivotR].forEach(pivot=>{
+      if(!pivot) return;
+      const sGeo = new THREE.LatheGeometry(v2([
+        [sHalf*1.05, 2],[sHalf*1.12, -4],[sHalf*0.85, reachLocal],
+      ]),18);
+      const sMesh = new THREE.Mesh(sGeo, mat);
+      sMesh.scale.z = 0.85;
+      sMesh.castShadow = true;
+      pivot.add(sMesh);
+    });
+  }
+}
+
+function addBottomMesh(L,cfg,isShort){
+  const ease = (EASE_BY_TALLE[cfg.talle] ?? 3)*0.85;
+  const flare = FLARE_BY_TALLE[cfg.talle] ?? 1.05;
+  let hemY;
+  if(isShort) hemY = L.crotchY-0.09*L.H;
+  else if(cfg.length==='capri') hemY = L.kneeY-0.10*L.H;
+  else hemY = L.ankleY-2;
+
+  const mat = new THREE.MeshStandardMaterial({color:new THREE.Color(cfg.color), roughness:0.82, metalness:0.02, side:THREE.DoubleSide});
+
+  const wbH = Math.max(L.waistY-L.hipY,4);
+  const wb = new THREE.Mesh(
+    new THREE.CylinderGeometry(L.waistHalf+ease*0.6, L.hipHalf+ease*0.8, wbH, 28,1,true),
+    mat
+  );
+  wb.position.y = (L.waistY+L.hipY)/2;
+  wb.castShadow = true;
+  figureGroup.add(wb);
+
+  const legOffset = L.hipHalf*0.42;
+  const rTop = L.hipHalf*0.5+ease;
+  const rHem = rTop*flare*0.62;
+  [-1,1].forEach(sign=>{
+    const geo = new THREE.LatheGeometry(v2([
+      [rHem, hemY],[rTop*0.85, (hemY+L.crotchY)/2],[rTop, L.crotchY],
+    ]),24);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.x = sign*legOffset;
+    mesh.scale.z = 0.8;
+    mesh.castShadow = true;
+    figureGroup.add(mesh);
+  });
+}
+
+function updateSummary(){
+  document.getElementById('summary').innerHTML =
+    `<b>${state.height} cm</b> · Hombros <b>${state.shoulder}</b> · Pecho <b>${state.chest}</b> · Cintura <b>${state.waist}</b> · Cadera <b>${state.hip}</b> cm`;
+}
+
+/* ---- Rotación (real, en 3D) ---- */
+function angleName(a){
+  if(a<23||a>337) return 'Frente';
+  if(a<68) return '3/4';
+  if(a<113) return 'Perfil';
+  if(a<203) return 'Espalda';
+  if(a<248) return 'Perfil';
+  if(a<293) return '3/4';
+  return 'Frente';
+}
+function setThetaDeg(deg){
+  state.theta = ((deg%360)+360)%360;
+  const L = computeLandmarksCm(state);
+  figureGroup.rotation.y = state.theta*Math.PI/180;
+  camera.position.set(0, L.H*0.52, 210+L.H);
+  camera.lookAt(0, L.H*0.5, 0);
+  const a = Math.round(state.theta);
+  document.getElementById('v-angle').textContent = `${a}° — ${angleName(a)}`;
+  document.getElementById('s-rotate').value = a;
+  const presets = document.querySelectorAll('#view-presets button');
+  let closest=null, best=999;
+  presets.forEach(b=>{
+    const d = Math.min(Math.abs(a-Number(b.dataset.ang)), 360-Math.abs(a-Number(b.dataset.ang)));
+    if(d<best){best=d; closest=b;}
+  });
+  presets.forEach(b=>b.classList.toggle('active', b===closest && best<8));
+}
+document.getElementById('s-rotate').addEventListener('input', e=> setThetaDeg(Number(e.target.value)));
+document.querySelectorAll('#view-presets button').forEach(btn=>{
+  btn.addEventListener('click', ()=> setThetaDeg(Number(btn.dataset.ang)));
+});
+
+/* ---- Brazos ---- */
+function applyArmLift(){
+  const rad = -state.armLift*Math.PI/180;
+  if(armPivotL) armPivotL.rotation.x = rad;
+  if(armPivotR) armPivotR.rotation.x = rad;
+}
+function setArmLift(deg){
+  state.armLift = deg;
+  applyArmLift();
+  document.getElementById('s-arms').value = deg;
+  document.getElementById('v-arms').textContent = deg===0 ? 'Abajo' : deg>=150 ? 'Arriba' : 'Adelante';
+  document.querySelectorAll('#arm-presets button').forEach(b=>{
+    b.classList.toggle('active', Math.abs(Number(b.dataset.arm)-deg)<2);
+  });
+}
+document.getElementById('s-arms').addEventListener('input', e=> setArmLift(Number(e.target.value)));
+document.querySelectorAll('#arm-presets button').forEach(btn=>{
+  btn.addEventListener('click', ()=> setArmLift(Number(btn.dataset.arm)));
+});
+
+/* ---- Sliders (medidas) ---- */
+const sliderMap = [['s-height','height','v-height',' cm'],['s-shoulder','shoulder','v-shoulder',' cm'],
+  ['s-chest','chest','v-chest',' cm'],['s-waist','waist','v-waist',' cm'],['s-hip','hip','v-hip',' cm']];
+function syncSliders(){
+  sliderMap.forEach(([id,key,vid,suf])=>{
+    document.getElementById(id).value = state[key];
+    document.getElementById(vid).textContent = state[key]+suf;
+  });
+}
+sliderMap.forEach(([id,key,vid,suf])=>{
+  document.getElementById(id).addEventListener('input', e=>{
+    state[key] = Number(e.target.value);
+    document.getElementById(vid).textContent = state[key]+suf;
+    rebuildFigure();
+  });
+});
+
+/* ---- Género ---- */
+document.getElementById('btn-mujer').addEventListener('click', ()=>setGender('mujer'));
+document.getElementById('btn-hombre').addEventListener('click', ()=>setGender('hombre'));
+function setGender(g){
+  state.gender=g;
+  Object.assign(state, DEFAULTS[g]);
+  document.getElementById('btn-mujer').classList.toggle('active', g==='mujer');
+  document.getElementById('btn-hombre').classList.toggle('active', g==='hombre');
+  syncSliders();
+  renderTalleOptions();
+  rebuildFigure();
+}
+document.getElementById('btn-reset').addEventListener('click', ()=> setGender(state.gender));
+
+/* ---- Ropa: tabs, opciones, talle, color ---- */
+const tabButtons = document.querySelectorAll('.tabs button');
+tabButtons.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    tabButtons.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.clothing.category = btn.dataset.cat;
+    updateOptionVisibility();
+    renderTalleOptions();
+    rebuildFigure();
+  });
+});
+function updateOptionVisibility(){
+  const cat = state.clothing.category;
+  document.getElementById('opts-sleeve').style.display = (cat==='remera'||cat==='vestido') ? '' : 'none';
+  document.getElementById('opts-length-top').style.display = (cat==='remera') ? '' : 'none';
+  document.getElementById('opts-length-dress').style.display = (cat==='vestido') ? '' : 'none';
+  document.getElementById('opts-length-pants').style.display = (cat==='pantalon') ? '' : 'none';
+  document.getElementById('opts-talle').style.display = (cat==='ninguna') ? 'none' : '';
+}
+function renderTalleOptions(){
+  const cat = state.clothing.category;
+  const chart = TALLE_CHART[state.gender][talleGroup(cat)];
+  const row = document.getElementById('talle-row');
+  row.innerHTML = '';
+  Object.keys(chart).forEach(t=>{
+    const [a,b] = chart[t];
+    const btn = document.createElement('button');
+    btn.textContent = `${t} · ${a}–${b}cm`;
+    btn.dataset.val = t;
+    if(t===state.clothing.talle) btn.classList.add('active');
+    btn.addEventListener('click', ()=>{
+      state.clothing.talle = t;
+      row.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      updateTalleInfo();
+      rebuildFigure();
+    });
+    row.appendChild(btn);
+  });
+  updateTalleInfo();
+}
+function updateTalleInfo(){
+  const cat = state.clothing.category;
+  const chart = TALLE_CHART[state.gender][talleGroup(cat)];
+  const t = state.clothing.talle;
+  const [a,b] = chart[t] || chart['M'];
+  document.getElementById('talle-info').textContent = `Talle ${t} ≈ ${a}–${b} cm de contorno de ${talleNoun(cat)}`;
+}
+document.querySelectorAll('.chip-row[data-field]').forEach(row=>{
+  const field = row.dataset.field;
+  row.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      row.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.clothing[field] = btn.dataset.val;
+      rebuildFigure();
+    });
+  });
+});
+document.getElementById('s-color').addEventListener('input', e=>{
+  state.clothing.color = e.target.value;
+  rebuildFigure();
+});
+const swatchWrap = document.getElementById('swatches');
+SWATCHES.forEach(col=>{
+  const b=document.createElement('button');
+  b.style.background=col;
+  b.addEventListener('click', ()=>{
+    state.clothing.color = col;
+    document.getElementById('s-color').value = col;
+    rebuildFigure();
+  });
+  swatchWrap.appendChild(b);
+});
+
+/* ---- Init ---- */
+syncSliders();
+updateOptionVisibility();
+renderTalleOptions();
+init3D();
+rebuildFigure();
+setThetaDeg(0);
+setArmLift(0);
+</script>
+</body>
+</html>
